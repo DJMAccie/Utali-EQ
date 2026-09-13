@@ -3,12 +3,9 @@
 <JUCERPROJECT id="pIaDIW" name="UTALITEQ" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" companyName="UTALI"
               companyWebsite="petyabouianov.com" companyCopyright="Petya Bouianov"
-              pluginVST3Category="EQ" pluginAAXCategory="1" pluginFormats="buildStandalone,buildVST3">
+              pluginVST3Category="EQ" pluginAAXCategory="1" pluginFormats="buildVST3">
   <MAINGROUP id="cjYvCO" name="UTALITEQ">
     <GROUP id="{A997D059-1B5C-7528-F7D8-CFA49B70D970}" name="Source">
-      <FILE id="bVQkfJ" name="knob_strip.png" compile="0" resource="1" file="J:/My Drive/Design, Illustraties, Artwork/UTALITEQ/Knob/knob_strip.png"/>
-      <FILE id="IqY3so" name="knob_strip@2x.png" compile="0" resource="1"
-            file="J:/My Drive/Design, Illustraties, Artwork/UTALITEQ/Knob/knob_strip@2x.png"/>
       <FILE id="vWwNMc" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
       <FILE id="XWFw09" name="PluginProcessor.h" compile="0" resource="0"
@@ -16,11 +13,13 @@
       <FILE id="BnevbS" name="PluginEditor.cpp" compile="1" resource="0"
             file="Source/PluginEditor.cpp"/>
       <FILE id="UUk0O5" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+      <FILE id="prmH01" name="Parameters.h" compile="0" resource="0" file="Source/Parameters.h"/>
+      <FILE id="prmC01" name="Parameters.cpp" compile="1" resource="0" file="Source/Parameters.cpp"/>
+      <FILE id="dspE01" name="EqualizerEngine.h" compile="0" resource="0" file="Source/DSP/EqualizerEngine.h"/>
+      <FILE id="dspS01" name="SaturationProcessor.h" compile="0" resource="0" file="Source/DSP/SaturationProcessor.h"/>
+      <FILE id="uiLfH1" name="UtaliLookAndFeel.h" compile="0" resource="0" file="Source/UI/UtaliLookAndFeel.h"/>
     </GROUP>
-    <FILE id="qCmDUQ" name="UTALITEQ UI Background.png" compile="0" resource="1"
-          file="J:/My Drive/Design, Illustraties, Artwork/UTALITEQ/UTALITEQ UI Background.png"/>
-    <FILE id="XnCZio" name="vibe_strip.png" compile="0" resource="1" file="J:/My Drive/Design, Illustraties, Artwork/UTALITEQ/Switch/vibe_strip.png"/>
-    <FILE id="GgYNWz" name="freq_strip.png" compile="0" resource="1" file="J:/My Drive/Design, Illustraties, Artwork/UTALITEQ/Switch/freq_strip.png"/>
+    <FILE id="teqPnl" name="teq_panel.png" compile="0" resource="1" file="Assets/teq_panel.png"/>
   </MAINGROUP>
   <MODULES>
     <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>

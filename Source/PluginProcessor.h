@@ -1,6 +1,13 @@
 #pragma once
+
+#if __has_include(<juce_audio_processors/juce_audio_processors.h>)
 #include <juce_audio_processors/juce_audio_processors.h>
-#include <juce_dsp/juce_dsp.h>
+#elif __has_include(<JuceHeader.h>)
+#include <JuceHeader.h>
+#endif
+#include "Parameters.h"
+#include "DSP/EqualizerEngine.h"
+#include "DSP/SaturationProcessor.h"
 
 class UTALITEQAudioProcessor : public juce::AudioProcessor
 {
@@ -10,7 +17,7 @@ public:
 
     //==========================================================================
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override;
 
 #ifndef JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
@@ -23,7 +30,11 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
 
     //==========================================================================
+#ifdef JucePlugin_Name
     const juce::String getName() const override { return JucePlugin_Name; }
+#else
+    const juce::String getName() const override { return "UTALITEQ"; }
+#endif
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
@@ -40,26 +51,14 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    juce::AudioProcessorValueTreeState& getAPVTS() { return parameters; }
+    juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return parameters; }
 
 private:
-    //==========================================================================
-    // Parameters
     juce::AudioProcessorValueTreeState parameters;
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    ParameterPointers paramPointers;
 
-    // DSP helpers
-    using Filter =
-        juce::dsp::ProcessorDuplicator< juce::dsp::IIR::Filter<float>,
-        juce::dsp::IIR::Coefficients<float> >;
-
-    Filter highPass, lowShelfBoost, lowShelfCut,
-        lowMidBell, highMidBell,
-        highShelfBoost, highShelfCut;
-
-    juce::dsp::Gain<float> outputGain;
-
-    void updateFilterCoefficients();
+    EqualizerEngine equalizerEngine;
+    SaturationProcessor saturationProcessor;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UTALITEQAudioProcessor)
 };

@@ -46,3 +46,7 @@ JuceLibraryCode/
 JUCE/
 Modules/
 *.jucer.old
+
+# OS / Archives
+.DS_Store
+*.zip

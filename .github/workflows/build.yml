@@ -1,0 +1,103 @@
+name: Build UTALI-EQ
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: macOS (VST3)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: which ninja || brew install ninja
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+
+      - name: Build Plugin
+        run: cmake --build build --config Release --parallel
+
+      - name: Package macOS Artifacts
+        run: |
+          mkdir -p package_macos
+          find build -name "UTALITEQ.vst3" -exec cp -R {} package_macos/ \;
+          cd package_macos && zip -r -y ../UTALITEQ-macOS.zip * && cd ..
+
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="v1.0.0"
+          fi
+          
+          gh release view "$TAG" 2>/dev/null || gh release create "$TAG" --title "UTALI-EQ ($TAG)" --notes "Automated VST3 release for macOS and Windows"
+          gh release upload "$TAG" UTALITEQ-macOS.zip --clobber
+
+  build-windows:
+    name: Windows (VST3)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Plugin
+        run: cmake --build build --config Release --parallel
+
+      - name: Package Windows Artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package_windows
+          $vst3 = Get-ChildItem -Path "build" -Filter "UTALITEQ.vst3" -Recurse | Select-Object -First 1
+
+          if ($vst3) { 
+              Write-Host "Found VST3 at $($vst3.FullName)"
+              Copy-Item -Path $vst3.FullName -Destination "package_windows/" -Recurse 
+          } else {
+              Write-Error "Could not find UTALITEQ.vst3"
+              exit 1
+          }
+
+          Compress-Archive -Path "package_windows/*" -DestinationPath "UTALITEQ-Windows.zip"
+
+      - name: Upload to GitHub Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'v1.0.0' }
+          
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              gh release create $tag --title "UTALI-EQ ($tag)" --notes "Automated VST3 release for macOS and Windows"
+          }
+          
+          gh release upload $tag UTALITEQ-Windows.zip --clobber
+

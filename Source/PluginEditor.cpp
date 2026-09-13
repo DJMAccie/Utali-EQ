@@ -1,130 +1,296 @@
 #include "PluginEditor.h"
-#include "PluginProcessor.h"
 
-// ───────────────────────────────── Film‑strip LFs
-FilmStripLF::FilmStripLF(juce::Image strip, int numFrames)
-    : img(std::move(strip)), frames(numFrames)
-{
-    frameW = img.getWidth();
-    frameH = img.getHeight() / frames;
-}
+#if __has_include(<JuceHeader.h>)
+#include <JuceHeader.h>
+#elif __has_include("BinaryData.h")
+#include "BinaryData.h"
+#endif
 
-void FilmStripLF::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h,
-    float pos, float, float, juce::Slider&)
-{
-    const int f = juce::jlimit(0, frames - 1,
-        (int)std::round(pos * (frames - 1)));
-
-    g.drawImage(img, x, y, w, h,        // dest
-        0, f * frameH, frameW, frameH);   // src
-}
-
-void FilmStripSwitchLF::drawRotarySlider(juce::Graphics& g, int x, int y, int w, int h,
-    float pos, float s, float e, juce::Slider& sl)
-{
-    const int   stops = frames - 1;            // e.g. 3 → 4 positions
-    const float snapped = std::round(pos * stops) / stops;
-    FilmStripLF::drawRotarySlider(g, x, y, w, h, snapped, s, e, sl);
-}
-
-// ───────────────────────────────── constants + layout
-static constexpr int knobPx = 40;      // rotary diameter
-static constexpr int knobFrames = 100;     // frames in knob strip
-
-static constexpr int vibeH = 40;           // vibe switch height (1:1 with knob)
-static constexpr int vibeW = 91;           // preserves 221×97 aspect for 40 px tall
-
-static constexpr int freqH = 40;          // 1‑to‑1 with knob height
-static constexpr int freqW = 91;          // 221×97 strip → 40 px tall ≈ 91 px wide
-
-/*  param‑id , centre‑x , centre‑y   (editor = 900 × 385)  */
-static const struct { const char* id; int x, y; } layout[]
-{
-    /* Low band */ { "LF_BOOST", 215, 125 }, { "LF_ATTEN", 145, 190 }, { "LF_FREQ", 215, 190 },
-    /* LMF      */ { "LMF_GAIN", 365, 125 }, { "LMF_Q",    330, 190 }, { "LMF_FREQ",400, 190 },
-    /* HMF      */ { "HMF_GAIN", 535, 125 }, { "HMF_Q",    495, 190 }, { "HMF_FREQ",570, 190 },
-    /* HF       */ { "HF_BOOST", 670, 125 }, { "HF_ATTEN", 750, 190 }, { "HF_FREQ", 670, 190 },
-    /* Bottom   */ { "HPF_FREQ", 215, 300 }, { "DRIVE",    535, 300 }, { "OUTPUT",  670, 300 }
-};
-
-// ───────────────────────────────── helper
-void UTALITEQAudioProcessorEditor::centre(juce::Component& c, int cx, int cy)
-{
-    c.setBounds(cx - c.getWidth() / 2,
-        cy - c.getHeight() / 2,
-        c.getWidth(), c.getHeight());
-}
-
-// ───────────────────────────────── constructor
+//==============================================================================
 UTALITEQAudioProcessorEditor::UTALITEQAudioProcessorEditor(UTALITEQAudioProcessor& p)
     : AudioProcessorEditor(&p), proc(p)
 {
-    /* 1 ▸ background */
-    background = juce::ImageCache::getFromMemory(
-        BinaryData::UTALITEQ_UI_Background_png,
-        BinaryData::UTALITEQ_UI_Background_pngSize);
+    setLookAndFeel(&utaliLookAndFeel);
 
-    /* 2 ▸ look‑and‑feels */
-    auto knobStrip = juce::ImageCache::getFromMemory(
-        BinaryData::knob_strip_png, BinaryData::knob_strip_pngSize);
-    knobLF = std::make_unique<FilmStripLF>(knobStrip, knobFrames);
-
-    auto freqStrip = juce::ImageCache::getFromMemory(
-        BinaryData::freq_strip_png, BinaryData::freq_strip_pngSize);   // 4 frames
-    freqLF = std::make_unique<FilmStripSwitchLF>(freqStrip, 4);
-
-    auto vibeStrip = juce::ImageCache::getFromMemory(
-        BinaryData::vibe_strip_png, BinaryData::vibe_strip_pngSize);   // 4 frames
-    vibeLF = std::make_unique<FilmStripSwitchLF>(vibeStrip, 4);
-
-    /* 3 ▸ rotary knobs + stepped freq switches */
-    for (auto& k : layout)
-        addControl(k.id, k.x, k.y);
-
-    /* 4 ▸ vibe 4‑way switch */
-    auto* vibe = new juce::Slider();
-    vibe->setLookAndFeel(vibeLF.get());
-    vibe->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    vibe->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    vibe->setRange(0, 3, 1);
-    vibe->setBufferedToImage(true);
-    vibe->setSize(vibeW, vibeH);
-
-    addAndMakeVisible(vibe);
-    attachments.add(new SliderAttach(proc.getAPVTS(), "VIBE_TYPE", *vibe));
-    centre(*vibe, 365, 318);                        // tweak Y if desired
-
-    setSize(900, 385);
-}
-
-// ───────────────────────────────── add knob / switch
-void UTALITEQAudioProcessorEditor::addControl(const juce::String& id, int cx, int cy)
-{
-    auto* s = new juce::Slider();
-    const bool stepped = (id == "LF_FREQ" || id == "HF_FREQ");
-
-    s->setLookAndFeel(stepped ? freqLF.get() : knobLF.get());
-    s->setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    s->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-    s->setBufferedToImage(true);
-
-    if (stepped)
+    // 1. Background Artwork
+#if defined(BinaryData_teq_panel_png) || defined(JUCE_USE_BINARYDATA)
+    backgroundImage = juce::ImageCache::getFromMemory(BinaryData::teq_panel_png, BinaryData::teq_panel_pngSize);
+#else
+    // Fallback search in BinaryData or disk
+    if (BinaryData::namedResourceListSize > 0)
     {
-        s->setRange(0, 3, 1);          // 4 discrete positions
-        s->setSize(freqW, freqH);      // ← give it its true aspect
+        for (int i = 0; i < BinaryData::namedResourceListSize; ++i)
+        {
+            if (juce::String(BinaryData::namedResourceList[i]).containsIgnoreCase("panel")
+                || juce::String(BinaryData::namedResourceList[i]).containsIgnoreCase("background"))
+            {
+                int sz = 0;
+                auto* data = BinaryData::getNamedResource(BinaryData::namedResourceList[i], sz);
+                if (data != nullptr && sz > 0)
+                {
+                    backgroundImage = juce::ImageCache::getFromMemory(data, sz);
+                    break;
+                }
+            }
+        }
     }
-    else
-        s->setSize(knobPx, knobPx);    // round pots
+#endif
 
-    addAndMakeVisible(s);
-    centre(*s, cx, cy);
+    // 2. Setup Sliders & Labels with Utali hardware vector styling
+    // --- Low Band ---
+    setupRotarySlider(lowBoostSlider, lowBoostLabel, "Low Boost", ParameterIDs::lfBoost, lowBoostAtt);
+    lowBoostSlider.textFromValueFunction = [](double v) { return juce::String(v, 1) + " dB"; };
 
-    knobs.add(s);
-    attachments.add(new SliderAttach(proc.getAPVTS(), id, *s));
+    setupRotarySlider(lowAttenSlider, lowAttenLabel, "Low Atten", ParameterIDs::lfAtten, lowAttenAtt);
+    lowAttenSlider.textFromValueFunction = [](double v) { return juce::String(v, 1) + " dB"; };
+
+    setupRotarySlider(lowFreqSlider, lowFreqLabel, "Low Freq", ParameterIDs::lfFreq, lowFreqAtt);
+    lowFreqSlider.textFromValueFunction = [](double v) {
+        const int idx = juce::jlimit(0, 3, static_cast<int>(std::round(v)));
+        return FrequencyTables::getLowFrequencyChoices()[idx] + " Hz";
+    };
+
+    // --- Low-Mid Band ---
+    setupRotarySlider(lmfGainSlider, lmfGainLabel, "LMF Gain", ParameterIDs::lmfGain, lmfGainAtt);
+    lmfGainSlider.textFromValueFunction = [](double v) { return (v > 0 ? "+" : "") + juce::String(v, 1) + " dB"; };
+
+    setupRotarySlider(lmfFreqSlider, lmfFreqLabel, "LMF Freq", ParameterIDs::lmfFreq, lmfFreqAtt);
+    lmfFreqSlider.textFromValueFunction = [](double v) { return juce::String(static_cast<int>(std::round(v))) + " Hz"; };
+
+    setupRotarySlider(lmfQSlider, lmfQLabel, "LMF Q", ParameterIDs::lmfQ, lmfQAtt);
+    lmfQSlider.textFromValueFunction = [](double v) { return juce::String(v, 2); };
+
+    // --- High-Mid Band ---
+    setupRotarySlider(hmfGainSlider, hmfGainLabel, "HMF Gain", ParameterIDs::hmfGain, hmfGainAtt);
+    hmfGainSlider.textFromValueFunction = [](double v) { return (v > 0 ? "+" : "") + juce::String(v, 1) + " dB"; };
+
+    setupRotarySlider(hmfFreqSlider, hmfFreqLabel, "HMF Freq", ParameterIDs::hmfFreq, hmfFreqAtt);
+    hmfFreqSlider.textFromValueFunction = [](double v) { return juce::String(static_cast<int>(std::round(v))) + " Hz"; };
+
+    setupRotarySlider(hmfQSlider, hmfQLabel, "HMF Q", ParameterIDs::hmfQ, hmfQAtt);
+    hmfQSlider.textFromValueFunction = [](double v) { return juce::String(v, 2); };
+
+    // --- High Band ---
+    setupRotarySlider(highBoostSlider, highBoostLabel, "High Boost", ParameterIDs::hfBoost, highBoostAtt);
+    highBoostSlider.textFromValueFunction = [](double v) { return juce::String(v, 1) + " dB"; };
+
+    setupRotarySlider(highAttenSlider, highAttenLabel, "High Atten", ParameterIDs::hfAtten, highAttenAtt);
+    highAttenSlider.textFromValueFunction = [](double v) { return juce::String(v, 1) + " dB"; };
+
+    setupRotarySlider(highFreqSlider, highFreqLabel, "High Freq", ParameterIDs::hfFreq, highFreqAtt);
+    highFreqSlider.textFromValueFunction = [](double v) {
+        const int idx = juce::jlimit(0, 3, static_cast<int>(std::round(v)));
+        return FrequencyTables::getHighFrequencyChoices()[idx] + " Hz";
+    };
+
+    // --- Master / Character Section ---
+    vibeBox.addItemList(FrequencyTables::getVibeChoices(), 1);
+    vibeBox.setJustificationType(juce::Justification::centred);
+    vibeBox.setLookAndFeel(&utaliLookAndFeel);
+    addAndMakeVisible(vibeBox);
+    vibeAtt = std::make_unique<ComboBoxAttachment>(proc.getAPVTS(), ParameterIDs::vibeType, vibeBox);
+
+    vibeLabel.setText("Vibe Type", juce::dontSendNotification);
+    vibeLabel.setJustificationType(juce::Justification::centred);
+    vibeLabel.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    vibeLabel.setColour(juce::Label::textColourId, UtaliLookAndFeel::getCreamColour());
+    vibeLabel.setLookAndFeel(&utaliLookAndFeel);
+    addAndMakeVisible(vibeLabel);
+
+    setupRotarySlider(hpfSlider, hpfLabel, "High Pass", ParameterIDs::hpfFreq, hpfAtt);
+    hpfSlider.textFromValueFunction = [](double v) { return juce::String(static_cast<int>(std::round(v))) + " Hz"; };
+
+    setupRotarySlider(driveSlider, driveLabel, "Tape Drive", ParameterIDs::drive, driveAtt);
+    driveSlider.textFromValueFunction = [](double v) { return juce::String(v, 1) + " dB"; };
+
+    setupRotarySlider(outputSlider, outputLabel, "Output", ParameterIDs::output, outputAtt);
+    outputSlider.textFromValueFunction = [](double v) { return (v > 0 ? "+" : "") + juce::String(v, 1) + " dB"; };
+
+    // 3. Window sizing & fixed aspect ratio matching hardware faceplate (2000 × 813 ≈ 2.46)
+    setResizable(true, true);
+    setResizeLimits(768, 312, 1536, 625);
+    getConstrainer()->setFixedAspectRatio(2000.0 / 813.0);
+    setSize(1024, 416);
 }
 
-// ───────────────────────────────── paint
+UTALITEQAudioProcessorEditor::~UTALITEQAudioProcessorEditor()
+{
+    // Detach all LookAndFeel pointers safely before destroying utaliLookAndFeel
+    setLookAndFeel(nullptr);
+
+    lowBoostSlider.setLookAndFeel(nullptr);
+    lowAttenSlider.setLookAndFeel(nullptr);
+    lowFreqSlider.setLookAndFeel(nullptr);
+    lmfGainSlider.setLookAndFeel(nullptr);
+    lmfFreqSlider.setLookAndFeel(nullptr);
+    lmfQSlider.setLookAndFeel(nullptr);
+    hmfGainSlider.setLookAndFeel(nullptr);
+    hmfFreqSlider.setLookAndFeel(nullptr);
+    hmfQSlider.setLookAndFeel(nullptr);
+    highBoostSlider.setLookAndFeel(nullptr);
+    highAttenSlider.setLookAndFeel(nullptr);
+    highFreqSlider.setLookAndFeel(nullptr);
+    hpfSlider.setLookAndFeel(nullptr);
+    driveSlider.setLookAndFeel(nullptr);
+    outputSlider.setLookAndFeel(nullptr);
+    vibeBox.setLookAndFeel(nullptr);
+
+    lowBoostLabel.setLookAndFeel(nullptr);
+    lowAttenLabel.setLookAndFeel(nullptr);
+    lowFreqLabel.setLookAndFeel(nullptr);
+    lmfGainLabel.setLookAndFeel(nullptr);
+    lmfFreqLabel.setLookAndFeel(nullptr);
+    lmfQLabel.setLookAndFeel(nullptr);
+    hmfGainLabel.setLookAndFeel(nullptr);
+    hmfFreqLabel.setLookAndFeel(nullptr);
+    hmfQLabel.setLookAndFeel(nullptr);
+    highBoostLabel.setLookAndFeel(nullptr);
+    highAttenLabel.setLookAndFeel(nullptr);
+    highFreqLabel.setLookAndFeel(nullptr);
+    hpfLabel.setLookAndFeel(nullptr);
+    driveLabel.setLookAndFeel(nullptr);
+    outputLabel.setLookAndFeel(nullptr);
+    vibeLabel.setLookAndFeel(nullptr);
+}
+
+//==============================================================================
+void UTALITEQAudioProcessorEditor::setupRotarySlider(juce::Slider& slider, juce::Label& label,
+                                                     const juce::String& text, const char* paramId,
+                                                     std::unique_ptr<SliderAttachment>& attachment)
+{
+    slider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    slider.setLookAndFeel(&utaliLookAndFeel);
+    slider.setPopupDisplayEnabled(true, true, this);
+    addAndMakeVisible(slider);
+
+    label.setText(text, juce::dontSendNotification);
+    label.setJustificationType(juce::Justification::centred);
+    label.setFont(juce::FontOptions(10.0f, juce::Font::bold));
+    label.setColour(juce::Label::textColourId, UtaliLookAndFeel::getCreamColour());
+    label.setLookAndFeel(&utaliLookAndFeel);
+    addAndMakeVisible(label);
+
+    attachment = std::make_unique<SliderAttachment>(proc.getAPVTS(), paramId, slider);
+}
+
+//==============================================================================
 void UTALITEQAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    g.drawImage(background, getLocalBounds().toFloat());
+    auto bounds = getLocalBounds().toFloat();
+    const auto cream = UtaliLookAndFeel::getCreamColour();
+
+    // Solid cream backing prevents alpha haloing and guarantees razor-sharp line art
+    g.fillAll(cream);
+
+    if (backgroundImage.isValid())
+    {
+        g.setImageResamplingQuality(juce::Graphics::highResamplingQuality);
+        g.drawImage(backgroundImage, bounds);
+    }
+    else
+    {
+        g.fillAll(juce::Colour(0xff22242a));
+        g.setColour(juce::Colours::white);
+        g.drawText("UTALI-EQ", bounds, juce::Justification::centred);
+    }
+
+    const float scale = bounds.getWidth() / 1024.0f;
+
+    // Section Header Badges in matching warm cream (#ece5d8) and dark pill plate
+    auto drawSectionBadge = [&g, scale, &cream](float cx, float cy, float w, float h, const juce::String& title) {
+        auto badgeArea = juce::Rectangle<float>((cx - w * 0.5f) * scale, cy * scale, w * scale, h * scale);
+
+        g.setColour(juce::Colour(0xdd101016));
+        g.fillRoundedRectangle(badgeArea, 3.0f * scale);
+        g.setColour(cream.withAlpha(0.35f));
+        g.drawRoundedRectangle(badgeArea, 3.0f * scale, 1.0f);
+
+        g.setColour(cream);
+        g.setFont(juce::FontOptions(11.0f * scale, juce::Font::bold));
+        g.drawText(title, badgeArea, juce::Justification::centred, false);
+    };
+
+    // Functional module centerlines positioned across the 5 faceplate columns:
+    const float cx1 = 154.0f;  // Low Band
+    const float cx2 = 333.0f;  // Low-Mid
+    const float cx3 = 512.0f;  // High-Mid
+    const float cx4 = 691.0f;  // High Band
+    const float cx5 = 870.0f;  // Master / Vibe
+
+    const float headerY = 46.0f;
+    drawSectionBadge(cx1, headerY, 84.0f, 20.0f, "Low Band");
+    drawSectionBadge(cx2, headerY, 84.0f, 20.0f, "Low-Mid");
+    drawSectionBadge(cx3, headerY, 84.0f, 20.0f, "High-Mid");
+    drawSectionBadge(cx4, headerY, 84.0f, 20.0f, "High Band");
+    drawSectionBadge(cx5, headerY, 94.0f, 20.0f, "Master / Vibe");
+}
+
+//==============================================================================
+void UTALITEQAudioProcessorEditor::resized()
+{
+    const float scale = static_cast<float>(getWidth()) / 1024.0f;
+    auto S = [scale](float val) -> int {
+        return static_cast<int>(std::round(val * scale));
+    };
+
+    // Module centerlines matching faceplate layout
+    const int cx1 = S(154.0f);  // Low Band
+    const int cx2 = S(333.0f);  // Low-Mid
+    const int cx3 = S(512.0f);  // High-Mid
+    const int cx4 = S(691.0f);  // High Band
+    const int cx5 = S(870.0f);  // Master / Vibe
+
+    // Helper: position a knob with its label badge placed cleanly ABOVE it
+    auto placeKnob = [scale, S](juce::Slider& s, juce::Label& l, int cx, float labelY, float labelW, float knobSize) {
+        const int scaledLabelW = S(labelW);
+        const int scaledLabelH = S(16.0f);
+        const int scaledKnob   = S(knobSize);
+        const int scaledKnobH  = scaledKnob + S(6.0f); // extra height prevents drop shadow clipping
+        const int scaledY      = S(labelY);
+
+        l.setFont(juce::FontOptions(juce::jmax(8.0f, 10.0f * scale), juce::Font::bold));
+        l.setBounds(cx - scaledLabelW / 2, scaledY, scaledLabelW, scaledLabelH);
+        s.setBounds(cx - scaledKnob / 2, scaledY + S(17.0f), scaledKnob, scaledKnobH);
+    };
+
+    // =========================================================================
+    // Column 1: Low Band (Boost, Atten, Frequency)
+    // =========================================================================
+    placeKnob(lowBoostSlider, lowBoostLabel, cx1, 80.0f, 76.0f, 54.0f);
+    placeKnob(lowAttenSlider, lowAttenLabel, cx1, 172.0f, 76.0f, 54.0f);
+    placeKnob(lowFreqSlider,  lowFreqLabel,  cx1, 264.0f, 76.0f, 54.0f);
+
+    // =========================================================================
+    // Column 2: Low-Mid (Gain, Freq, Q)
+    // =========================================================================
+    placeKnob(lmfGainSlider, lmfGainLabel, cx2, 80.0f, 76.0f, 54.0f);
+    placeKnob(lmfFreqSlider, lmfFreqLabel, cx2, 172.0f, 76.0f, 54.0f);
+    placeKnob(lmfQSlider,    lmfQLabel,    cx2, 264.0f, 76.0f, 54.0f);
+
+    // =========================================================================
+    // Column 3: High-Mid (Gain, Freq, Q)
+    // =========================================================================
+    placeKnob(hmfGainSlider, hmfGainLabel, cx3, 80.0f, 76.0f, 54.0f);
+    placeKnob(hmfFreqSlider, hmfFreqLabel, cx3, 172.0f, 76.0f, 54.0f);
+    placeKnob(hmfQSlider,    hmfQLabel,    cx3, 264.0f, 76.0f, 54.0f);
+
+    // =========================================================================
+    // Column 4: High Band (Boost, Atten, Frequency)
+    // =========================================================================
+    placeKnob(highBoostSlider, highBoostLabel, cx4, 80.0f, 76.0f, 54.0f);
+    placeKnob(highAttenSlider, highAttenLabel, cx4, 172.0f, 76.0f, 54.0f);
+    placeKnob(highFreqSlider,  highFreqLabel,  cx4, 264.0f, 76.0f, 54.0f);
+
+    // =========================================================================
+    // Column 5: Master / Vibe Section (Vibe Selector, HPF, Drive, Output)
+    // =========================================================================
+    const int vibeW = S(88.0f);
+    vibeLabel.setFont(juce::FontOptions(juce::jmax(8.0f, 10.0f * scale), juce::Font::bold));
+    vibeLabel.setBounds(cx5 - vibeW / 2, S(78.0f), vibeW, S(16.0f));
+    vibeBox.setBounds(cx5 - vibeW / 2, S(96.0f), vibeW, S(22.0f));
+
+    placeKnob(hpfSlider,    hpfLabel,    cx5, 130.0f, 74.0f, 48.0f);
+    placeKnob(driveSlider,  driveLabel,  cx5, 212.0f, 76.0f, 48.0f);
+    placeKnob(outputSlider, outputLabel, cx5, 294.0f, 74.0f, 48.0f);
 }

@@ -1,64 +1,66 @@
 #pragma once
+
+#if __has_include(<juce_audio_processors/juce_audio_processors.h>)
+#include <juce_audio_processors/juce_audio_processors.h>
+#elif __has_include(<JuceHeader.h>)
 #include <JuceHeader.h>
+#endif
+
 #include "PluginProcessor.h"
+#include "UI/UtaliLookAndFeel.h"
+#include <memory>
 
-// ──────────────────────────────────────────
-// Simple film‑strip Look‑and‑Feel (continuous rotary)
-class FilmStripLF : public juce::LookAndFeel_V4
-{
-public:
-    FilmStripLF(juce::Image strip, int numFrames);
-
-    void drawRotarySlider(juce::Graphics&, int x, int y, int w, int h,
-        float sliderPos, float rotaryStart, float rotaryEnd,
-        juce::Slider&) override;
-
-protected:
-    juce::Image img;
-    int frameW{}, frameH{}, frames{};
-};
-
-// 4‑frame “switch” version (snaps to frames‑1 stops)
-class FilmStripSwitchLF : public FilmStripLF
-{
-public:
-    FilmStripSwitchLF(juce::Image strip, int frames)
-        : FilmStripLF(std::move(strip), frames) {
-    }
-
-    void drawRotarySlider(juce::Graphics&, int x, int y, int w, int h,
-        float sliderPos, float rotaryStart, float rotaryEnd,
-        juce::Slider&) override;
-};
-
-// ──────────────────────────────────────────
 class UTALITEQAudioProcessorEditor : public juce::AudioProcessorEditor
 {
-    using APVTS = juce::AudioProcessorValueTreeState;
-    using SliderAttach = APVTS::SliderAttachment;
-
 public:
     explicit UTALITEQAudioProcessorEditor(UTALITEQAudioProcessor&);
-    ~UTALITEQAudioProcessorEditor() override = default;
+    ~UTALITEQAudioProcessorEditor() override;
 
     void paint(juce::Graphics&) override;
+    void resized() override;
 
 private:
     UTALITEQAudioProcessor& proc;
+    UtaliLookAndFeel utaliLookAndFeel;
 
-    // graphics
-    juce::Image                         background;
-    std::unique_ptr<FilmStripLF>        knobLF;
-    std::unique_ptr<FilmStripSwitchLF>  freqLF;
-    std::unique_ptr<FilmStripSwitchLF>  vibeLF;
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
 
-    // controls
-    juce::OwnedArray<juce::Slider>      knobs;
-    juce::OwnedArray<SliderAttach>      attachments;
+    // --- Controls & Attachments ---
+    // Low Band
+    juce::Slider lowBoostSlider, lowAttenSlider, lowFreqSlider;
+    juce::Label  lowBoostLabel, lowAttenLabel, lowFreqLabel;
+    std::unique_ptr<SliderAttachment> lowBoostAtt, lowAttenAtt, lowFreqAtt;
 
-    // helpers
-    static void centre(juce::Component&, int cx, int cy);
-    void addControl(const juce::String& paramID, int cx, int cy);
+    // Low-Mid Band
+    juce::Slider lmfGainSlider, lmfFreqSlider, lmfQSlider;
+    juce::Label  lmfGainLabel, lmfFreqLabel, lmfQLabel;
+    std::unique_ptr<SliderAttachment> lmfGainAtt, lmfFreqAtt, lmfQAtt;
+
+    // High-Mid Band
+    juce::Slider hmfGainSlider, hmfFreqSlider, hmfQSlider;
+    juce::Label  hmfGainLabel, hmfFreqLabel, hmfQLabel;
+    std::unique_ptr<SliderAttachment> hmfGainAtt, hmfFreqAtt, hmfQAtt;
+
+    // High Band
+    juce::Slider highBoostSlider, highAttenSlider, highFreqSlider;
+    juce::Label  highBoostLabel, highAttenLabel, highFreqLabel;
+    std::unique_ptr<SliderAttachment> highBoostAtt, highAttenAtt, highFreqAtt;
+
+    // Master / Character
+    juce::Slider hpfSlider, driveSlider, outputSlider;
+    juce::Label  hpfLabel, driveLabel, outputLabel;
+    std::unique_ptr<SliderAttachment> hpfAtt, driveAtt, outputAtt;
+
+    juce::ComboBox vibeBox;
+    juce::Label    vibeLabel;
+    std::unique_ptr<ComboBoxAttachment> vibeAtt;
+
+    juce::Image backgroundImage;
+
+    void setupRotarySlider(juce::Slider& slider, juce::Label& label,
+                           const juce::String& text, const char* paramId,
+                           std::unique_ptr<SliderAttachment>& attachment);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UTALITEQAudioProcessorEditor)
 };
