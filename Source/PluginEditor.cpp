@@ -106,11 +106,11 @@ UTALITEQAudioProcessorEditor::UTALITEQAudioProcessorEditor(UTALITEQAudioProcesso
     setupRotarySlider(outputSlider, outputLabel, "Output", ParameterIDs::output, outputAtt);
     outputSlider.textFromValueFunction = [](double v) { return (v > 0 ? "+" : "") + juce::String(v, 1) + " dB"; };
 
-    // 3. Window sizing & fixed aspect ratio matching hardware faceplate (2000 × 813 ≈ 2.46)
+    // 3. Window sizing & fixed aspect ratio matching hardware faceplate (12439 × 5062 ≈ 2.457)
     setResizable(true, true);
-    setResizeLimits(768, 312, 1536, 625);
-    getConstrainer()->setFixedAspectRatio(2000.0 / 813.0);
-    setSize(1024, 416);
+    setResizeLimits(768, 313, 1536, 625);
+    getConstrainer()->setFixedAspectRatio(12439.0 / 5062.0);
+    setSize(1024, 417);
 }
 
 UTALITEQAudioProcessorEditor::~UTALITEQAudioProcessorEditor()
